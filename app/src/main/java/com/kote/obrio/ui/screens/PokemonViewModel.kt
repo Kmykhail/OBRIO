@@ -1,15 +1,25 @@
 package com.kote.obrio.ui.screens
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.Image
+import android.util.LruCache
+import androidx.core.util.lruCache
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kote.obrio.data.cache.ImageMemoryCache
 import com.kote.obrio.data.model.PokemonBasic
 import com.kote.obrio.data.repository.PokemonRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.net.URL
 import javax.inject.Inject
 
 data class UiPokemonBasic(
@@ -30,6 +40,9 @@ class PokemonViewModel @Inject constructor(
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _bmpByUrl = MutableStateFlow<MutableMap<String, Bitmap>>(mutableMapOf())
+    val bmpByURL = _bmpByUrl.asStateFlow()
 
     private var offset = 0
     private var end = false
@@ -66,6 +79,7 @@ class PokemonViewModel @Inject constructor(
                     Timber.e("Failed to get PokemonListResponse")
                 }
             }
+            Timber.i("UiPokemonBasic items size: ${_items.value.size}")
         }
     }
 
@@ -91,6 +105,30 @@ class PokemonViewModel @Inject constructor(
             "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${basic.getId()}.png"
         } catch (e: Exception) {
             "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/0.png"
+        }
+    }
+
+    fun loadImage(url:String) {
+        if (ImageMemoryCache.get(url) == null) {
+            viewModelScope.launch {
+                val bmp = downloadBitmap(url)
+                bmp?.let {
+                    ImageMemoryCache.put(url, it)
+                    _bmpByUrl.update { curMap ->
+                        (curMap + (url to it)) as MutableMap<String, Bitmap>
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun downloadBitmap(url: String): Bitmap? = withContext(Dispatchers.IO){
+        try {
+            val stream = URL(url).openStream()
+            BitmapFactory.decodeStream(stream)
+        } catch (e: Exception) {
+            Timber.e("Failed decodeStream by url: $url")
+            null
         }
     }
 }
