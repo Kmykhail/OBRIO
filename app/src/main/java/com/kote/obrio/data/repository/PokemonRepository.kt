@@ -1,6 +1,5 @@
 package com.kote.obrio.data.repository
 
-import android.util.Log
 import com.kote.obrio.data.api.PokemonApiService
 import com.kote.obrio.data.model.Pokemon
 import com.kote.obrio.data.model.PokemonListResponse

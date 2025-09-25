@@ -4,10 +4,14 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.Image
 import android.util.LruCache
+import androidx.compose.ui.geometry.Offset
 import androidx.core.util.lruCache
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kote.obrio.data.cache.ImageMemoryCache
+import com.kote.obrio.data.model.Pokemon
 import com.kote.obrio.data.model.PokemonBasic
 import com.kote.obrio.data.repository.PokemonRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,6 +19,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -27,6 +35,7 @@ data class UiPokemonBasic(
     val name: String,
     val imageUrl: String,
 )
+
 
 @HiltViewModel
 class PokemonViewModel @Inject constructor(
@@ -41,21 +50,40 @@ class PokemonViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _bmpByUrl = MutableStateFlow<MutableMap<String, Bitmap>>(mutableMapOf())
+    private val _bmpByUrl = MutableStateFlow<Map<String, Bitmap>>(mutableMapOf())
     val bmpByURL = _bmpByUrl.asStateFlow()
+
+    private val _selectedPokemon = MutableStateFlow<Pokemon?>(null)
+    val selectedPokemon = _selectedPokemon.asStateFlow()
 
     private var offset = 0
     private var end = false
     private val pageSize = 20
 
     init {
-        loadNext()
+            loadNext()
+    }
+
+    fun loadPokemonDetails(name: String) {
+        viewModelScope.launch {
+            val res = apiRepository.getPokemonDetails(name)
+            when {
+                res.isSuccess -> {
+                    _selectedPokemon.value = res.getOrNull()!!
+                    println(">>>>>>>>${_selectedPokemon.value}, ${_items.value.size}")
+                }
+                res.isFailure -> {
+                    Timber.e("Failed to get specific pokemon")
+                }
+            }
+        }
     }
 
     fun loadNext() {
         if (_isLoading.value || end) return
         _isLoading.value = true
 
+        Timber.i(">>>>Offset: $offset")
         viewModelScope.launch {
             val res = apiRepository.getPokemonList(offset, pageSize)
             when {

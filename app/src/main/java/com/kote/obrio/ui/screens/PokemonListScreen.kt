@@ -2,6 +2,7 @@ package com.kote.obrio.ui.screens
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,7 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -44,7 +45,6 @@ fun PokemonListScreen(
     val favorites by viewModel.favorites.collectAsState()
     val bmpByUrl by viewModel.bmpByURL.collectAsState()
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
 
     Scaffold(
     ) { innerPadding ->
@@ -79,14 +79,14 @@ fun PokemonListScreen(
                 }
             }
 
-//            LaunchedEffect(listState) {
-//                snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
-//                    .collect { lastIndex ->
-//                        if (lastIndex != null && lastIndex >= items.size - 5) {
-//                            viewModel.loadNext()
-//                        }
-//                    }
-//            }
+            LaunchedEffect(listState) {
+                snapshotFlow { Pair(listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index, items.size)}
+                    .collect { (lastIndex, size) ->
+                        if (lastIndex != null && lastIndex >= items.size - 5 && !viewModel.isLoading.value) {
+                            viewModel.loadNext()
+                        }
+                    }
+            }
         }
     }
 }
@@ -94,7 +94,7 @@ fun PokemonListScreen(
 @Composable
 fun PokemonListItem(
     pokemon: UiPokemonBasic,
-    bmpByUrl: MutableMap<String, Bitmap>,
+    bmpByUrl: Map<String, Bitmap>,
     loadImage: (String) -> Unit,
     isFavorite: Boolean,
     onFavorite: () -> Unit,
@@ -105,6 +105,7 @@ fun PokemonListItem(
         modifier = Modifier
             .fillMaxWidth()
             .padding(10.dp)
+            .clickable(onClick = onClick)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically){
             PokemonImage(pokemon.imageUrl, bmpByUrl, loadImage, modifier = Modifier.size(92.dp))
@@ -126,9 +127,9 @@ fun PokemonListItem(
 }
 
 @Composable
-private fun PokemonImage(
+fun PokemonImage(
     url: String,
-    bmpByUrl: MutableMap<String, Bitmap>,
+    bmpByUrl: Map<String, Bitmap>,
     loadImage: (String) -> Unit,
     modifier : Modifier = Modifier
 ) {
